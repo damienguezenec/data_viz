@@ -207,7 +207,7 @@ elif section == "🌡️ Prevalence":
     st.header("Drug Usage Prevalence")
     st.markdown("The heatmap shows the distribution of usage levels across substances. Darker cells = more recent/frequent use.")
 
-    st.markdown('<div class="insight-box"><strong>Key observation</strong><br>Cannabis shows the most polarized distribution — highest "Never" AND highest "Last day" among illicit drugs.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="insight-box"><strong>Key observation</strong><br>Most of the participants do not use illegal drugs. However, alcohol, cannabis and nicotine are way more tried than others.</div>', unsafe_allow_html=True)
 
     base_drugs = ['cannabis', 'alcohol', 'nicotine', 'ecstasy', 'coke',
                   'lsd', 'ketamine', 'mushrooms', 'amphet', 'benzos', 'heroin', 'meth']
