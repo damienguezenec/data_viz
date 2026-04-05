@@ -224,7 +224,7 @@ legal and illegal substances.
             return ''
 
         st.dataframe(
-            df_display.style.applymap(color_vibe).format(precision=2),
+            df_display.style.map(color_vibe).format(precision=2), # .map au lieu de .applymap
             use_container_width=True,
             height=int(len(df_matrix) * 35.5) + 38
         )
