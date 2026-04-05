@@ -6,10 +6,12 @@ import numpy as np
 import pandas as pd
 import altair as alt
 import streamlit as st
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
 
-
-
+# ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
+# ─────────────────────────────────────────────────────────────
 
 st.set_page_config(
     page_title="Mind & Substance",
@@ -20,27 +22,33 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-
-    div[data-testid="stSidebarContent"] {
-        background-color: var(--background-color); /* S'adapte au thème */
-        border-right: 1px solid rgba(151, 151, 151, 0.1);
-    }
-    
-    [data-theme="light"] div[data-testid="stSidebarContent"] {
-        background: #faf9f6;
-    }
-    [data-theme="dark"] div[data-testid="stSidebarContent"] {
-        background: #1a1c24; /* Un bleu-gris foncé professionnel */
-    }
-    div[data-testid="stSidebarContent"] .stText, 
-    div[data-testid="stSidebarContent"] label {
-        color: var(--text-color) !important;
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap');
+    html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
+    h1, h2, h3 { font-family: 'Playfair Display', serif !important; }
+    .block-container { padding-top: 1.5rem; padding-bottom: 3rem; max-width: 1200px; }
+    .kicker { font-family: 'DM Mono', monospace; font-size: 0.7rem; font-weight: 500;
+        letter-spacing: 0.15em; text-transform: uppercase; color: #c0392b; margin-bottom: 0.4rem; }
+    .insight-box { background: #faf8f4; border-left: 3px solid #c0392b;
+        padding: 0.9rem 1.1rem; border-radius: 0 4px 4px 0; margin-bottom: 0.8rem; }
+    .insight-box strong { color: #c0392b; font-size: 0.75rem;
+        text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.2rem; }
+    .metric-row { display: flex; gap: 1px; background: #e8e5de; border: 1px solid #e8e5de;
+        border-radius: 4px; overflow: hidden; margin-bottom: 1.5rem; }
+    .metric-card { background: white; padding: 1.1rem 1rem; text-align: center; flex: 1; }
+    .metric-card .num { font-family: 'Playfair Display', serif; font-size: 1.9rem;
+        font-weight: 900; color: #1a1a1a; line-height: 1; }
+    .metric-card .num span { color: #c0392b; }
+    .metric-card .lbl { font-size: 0.72rem; color: #8a8580; text-transform: uppercase;
+        letter-spacing: 0.07em; margin-top: 0.3rem; }
+    .section-tag { font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.12em;
+        text-transform: uppercase; color: #8a8580; margin-bottom: 0.3rem; }
+    div[data-testid="stSidebarContent"] { background: #faf9f6; }
 </style>
 """, unsafe_allow_html=True)
 
-# CONSTANTS : mapping for comprehensive graphs
-
+# ─────────────────────────────────────────────────────────────
+# CONSTANTS
+# ─────────────────────────────────────────────────────────────
 COLS = ['ID','Age','Gender','Education','Country','Ethnicity',
         'Nscore','Escore','Oscore','Ascore','Cscore','Impulsive','SS',
         'Alcohol','Amphet','Amyl','Benzos','Caff','Cannabis',
@@ -75,8 +83,10 @@ FOCUS_DRUGS= ['Cannabis','Ecstasy','LSD','Coke','Heroin','Ketamine','Mushrooms',
               'Amphet','Benzos','Nicotine','Alcohol','Legalh','Amyl']
 ILLICIT    = ['Cannabis','Ecstasy','LSD','Coke','Heroin','Amphet','Ketamine','Mushrooms']
 
-
+# ─────────────────────────────────────────────────────────────
 # DATA LOADING
+# ─────────────────────────────────────────────────────────────
+@st.cache_data(show_spinner="Loading dataset from UCI...")
 def load_data():
     from ucimlrepo import fetch_ucirepo
     alt.data_transformers.disable_max_rows()
@@ -127,19 +137,23 @@ def load_data():
 df_raw = load_data()
 alt.data_transformers.disable_max_rows()
 
+# ─────────────────────────────────────────────────────────────
 # SIDEBAR
+# ─────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("##Mind & Substance")
     st.markdown("*Personality, Demographics & Drugs*")
     st.divider()
     st.markdown("**Navigate**")
-    section = st.radio("", ["Overview",
+    section = st.radio("", [
+        "Overview",
         "Drug Prevalence",
         "Demographics",
+        "Traits × Usage",
         "Drug Co-use",
         "Poly-drug Profiles",
-        "Radar",
-         "Appendix",
+        "Prediction",
+        "Radar"
     ], label_visibility="collapsed")
     st.divider()
     st.markdown("**Global filters**")
@@ -161,93 +175,19 @@ if excl_semer:
     df = df[~df['Semer_claimer']]
 N = len(df)
 
+# ─────────────────────────────────────────────────────────────
 # HEADER
+# ─────────────────────────────────────────────────────────────
 st.markdown('<div class="kicker">Data Analysis · Psychology · Substance Use</div>', unsafe_allow_html=True)
 st.title("Mind & Substance")
-st.markdown(f" Please run the app in light mode, as the graph were built for a light mode setting.")
-# PROJECT DESCRIPTION / ACCOMPANYING TEXT
-st.markdown("""
-### About this Project
-This interactive platform serves as a **multidimensional analysis of the intersection between human personality and substance use**. 
-By leveraging the *UCI Drug Consumption* dataset—which includes responses from over **1,800 individuals**, this website 
-transforms raw psychometric data into visual insights. 
-
-
-""")
-
-st.divider()
+st.markdown(f"Exploring personality, demographics and drug consumption across **{N:,} respondents** · UCI Drug Consumption dataset")
 st.divider()
 
-# 0 — OVERVIEW: BEHAVIORAL MATRIX
-
-
+# ═══════════════════════════════════════════════════════════════
+# 1 — OVERVIEW
+# ═══════════════════════════════════════════════════════════════
 if section == "Overview":
-    st.write("""
-### Understanding the Psychological Fingerprint
-The visualizations below explore how the **Big Five personality traits** (Neuroticism, Extraversion, Openness, 
-Agreeableness, and Conscientiousness), alongside impulsivity and sensation seeking, correlate with the use of 18 different 
-legal and illegal substances.
-""")
-    st.header("Behavioral Personality Matrix")
-    st.markdown("""
-    This matrix displays the **Psychological Fingerprint** of current users for each substance. 
-    Values represent the **Mean Z-Score** of traits for respondents who used the drug within the last month.
-    """)
-
-    matrix_records = []
-    focus = [d for d in FOCUS_DRUGS if f'{d}_current' in df.columns]
-
-    for drug in focus:
-        current_users = df[df[f'{drug}_current'] == True]
-        
-        if len(current_users) > 5: 
-            stats = {'Substance': drug, 'N': len(current_users)}
-            for trait in TRAIT_LIST:
-                stats[trait] = current_users[trait].mean()
-            matrix_records.append(stats)
-    
-    df_matrix = pd.DataFrame(matrix_records)
-
-    if not df_matrix.empty:
-        # Reorder columns for better readability
-        cols_order = ['Substance', 'N'] + TRAIT_LIST
-        df_display = df_matrix[cols_order].set_index('Substance')
-
-        def color_vibe(val):
-            if isinstance(val, (int, float)):
-                color = 'transparent'
-                if val > 0.5: color = '#f8d7da'    # Strong Positive Correlation
-                elif val > 0.2: color = '#fff3cd'  # Mild Positive Correlation
-                elif val < -0.5: color = '#d1ecf1' # Strong Negative Correlation
-                elif val < -0.2: color = '#e2e3e5' # Mild Negative Correlation
-                return f'background-color: {color}; color: #1a1a1a'
-            return ''
-
-        st.dataframe(
-            df_display.style.applymap(color_vibe).format(precision=2),
-            use_container_width=True,
-            height=int(len(df_matrix) * 35.5) + 38
-        )
-
-        st.markdown("""
-        <div class="insight-box">
-            <strong>Key Behavioral Archetypes</strong>
-            <ul>
-                <li><strong>The Open Seeker:</strong> High <em>Openness</em> is the primary driver for Psychedelics (LSD, Mushrooms).</li>
-                <li><strong>The Low Constraint:</strong> Low <em>Conscientiousness</em> is a universal marker for frequent illicit substance use.</li>
-                <li><strong>The Sensation Hunter:</strong> <em>Sensation Seeking</em> and <em>Impulsivity</em> peak in Stimulant users (Coke, Amphet).</li>
-                <li><strong>The Emotional Regulator:</strong> High <em>Neuroticism</em> correlates with Anxiolytics and Depressants (Benzos, Alcohol).</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.warning("No data available for the current filters.")
-
-
-
-# 1 — appendix 
-if section == "Appendix":
-    st.header("Appendix : Global Info about the Dataset used")
+    st.header("Dataset Overview")
     st.markdown(f"""
     <div class="metric-row">
       <div class="metric-card"><div class="num">{N:,}</div><div class="lbl">Respondents</div></div>
@@ -311,8 +251,9 @@ if section == "Appendix":
         st.altair_chart(c, use_container_width=True)
 
 
+# ═══════════════════════════════════════════════════════════════
 # 2 — DRUG PREVALENCE
-
+# ═══════════════════════════════════════════════════════════════
 elif section == "Drug Prevalence":
     st.header("Drug Usage Prevalence")
     focus = [d for d in FOCUS_DRUGS if d in df.columns]
@@ -324,6 +265,14 @@ elif section == "Drug Prevalence":
             records.append({'Drug':drug,'Usage':USAGE_LABELS[cl],'UsageOrder':USAGE_ORDER.index(cl),'Pct':round(pct,1)})
     df_hm = pd.DataFrame(records)
 
+    st.markdown('<div class="section-tag">Chart 5 — Usage heatmap (%)</div>', unsafe_allow_html=True)
+    hm = alt.Chart(df_hm).mark_rect().encode(
+        x=alt.X('Usage:O',sort=USAGE_DISPLAY,title='Usage frequency',axis=alt.Axis(labelAngle=-20)),
+        y=alt.Y('Drug:N',sort=alt.EncodingSortField(field='Pct',op='sum',order='descending'),title=None),
+        color=alt.Color('Pct:Q',scale=alt.Scale(scheme='viridis'),title='% respondents'),
+        tooltip=['Drug','Usage',alt.Tooltip('Pct:Q',format='.1f',title='%')]
+    ).properties(height=380)
+    st.altair_chart(hm, use_container_width=True)
 
     st.divider()
     col1, col2 = st.columns(2)
@@ -353,36 +302,34 @@ elif section == "Drug Prevalence":
         ).properties(height=280)
         st.altair_chart(bar2, use_container_width=True)
 
- 
-    st.markdown('<div class="section-tag">Chart 5 — Usage heatmap (%)</div>', unsafe_allow_html=True)
-    hm = alt.Chart(df_hm).mark_rect().encode(
-        x=alt.X('Usage:O',sort=USAGE_DISPLAY,title='Usage frequency',axis=alt.Axis(labelAngle=-20)),
-        y=alt.Y('Drug:N',sort=alt.EncodingSortField(field='Pct',op='sum',order='descending'),title=None),
-        color=alt.Color('Pct:Q',scale=alt.Scale(scheme='viridis'),title='% respondents'),
-        tooltip=['Drug','Usage',alt.Tooltip('Pct:Q',format='.1f',title='%')]
-    ).properties(height=380)
-    st.altair_chart(hm, use_container_width=True)
-    
-    st.write("""
-    ### Prevalence and Intensity
-    While some substances like **Alcohol** show near-universal lifetime prevalence, 
-    the charts above distinguish between "ever used" and "current intensity." 
-    The **Mean Usage Intensity** (Chart 7) is particularly revealing, as it highlights which substances 
-    transition from experimental use to daily habits, versus those that remain occasional or 
-    recreational for the majority of the cohort.
-    """) 
+    st.divider()
+    st.markdown('<div class="section-tag">Chart 8 — Stacked usage level distribution per drug</div>', unsafe_allow_html=True)
+    drug_stack = st.multiselect("Select drugs:", focus, default=focus[:8])
+    if drug_stack:
+        df_stack = df_hm[df_hm['Drug'].isin(drug_stack)]
+        stacked = alt.Chart(df_stack).mark_bar().encode(
+            x=alt.X('Pct:Q',stack='normalize',title='% respondents (normalized)',
+                axis=alt.Axis(format='%',gridColor='#f0ede6')),
+            y=alt.Y('Drug:N',sort=alt.EncodingSortField(field='UsageOrder',op='max',order='descending'),title=None),
+            color=alt.Color('Usage:O',sort=USAGE_DISPLAY,scale=alt.Scale(scheme='viridis'),title='Usage level'),
+            tooltip=['Drug','Usage',alt.Tooltip('Pct:Q',format='.1f',title='%')]
+        ).properties(height=max(200,len(drug_stack)*40))
+        st.altair_chart(stacked, use_container_width=True)
 
 
+# ═══════════════════════════════════════════════════════════════
 # 3 — DEMOGRAPHICS
+# ═══════════════════════════════════════════════════════════════
 elif section == "Demographics":
-
     st.header("Demographics × Drug Consumption")
-    st.markdown("How do age, gender, and education shape drug use patterns across all substances?")
+    st.markdown("How do age, gender, and education shape drug use patterns?")
 
-    selected_drugs_demo = [d for d in FOCUS_DRUGS if d in df.columns]
+    focus = [d for d in FOCUS_DRUGS if d in df.columns]
+    selected_drugs_demo = st.multiselect("Drugs to display:", focus,
+        default=['Cannabis','Ecstasy','LSD','Coke','Nicotine','Alcohol'])
 
     if not selected_drugs_demo:
-        st.error("No drug data found in the dataset.")
+        st.warning("Select at least one drug.")
     else:
         # AGE
         st.divider()
@@ -397,18 +344,29 @@ elif section == "Demographics":
                 age_records.append({'Drug':d,'Age':age,'Current_pct':round(pct,1),'MeanScore':round(mean,2)})
         df_age = pd.DataFrame(age_records)
 
-        st.markdown('<div class="section-tag">Chart 10 — Heatmap: age × drug (mean score)</div>', unsafe_allow_html=True)
-        hm = alt.Chart(df_age).mark_rect().encode(
-            x=alt.X('Age:O',sort=AGE_ORDER,title='Age group'),
-            y=alt.Y('Drug:N',title=None),
-            color=alt.Color('MeanScore:Q',scale=alt.Scale(scheme='blues'),title='Mean score'),
-            tooltip=['Drug','Age',alt.Tooltip('MeanScore:Q',format='.2f')]
-        ).properties(height=max(300, len(selected_drugs_demo)*20)) # Hauteur adaptative
-        
-        txt = hm.mark_text(fontSize=10).encode(
-            text=alt.Text('MeanScore:Q',format='.1f'),
-            color=alt.condition(alt.datum.MeanScore>3,alt.value('white'),alt.value('black')))
-        st.altair_chart(hm+txt, use_container_width=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="section-tag">Chart 9 — % current users by age group</div>', unsafe_allow_html=True)
+            c = alt.Chart(df_age).mark_line(point=True,strokeWidth=2).encode(
+                x=alt.X('Age:O',sort=AGE_ORDER,title='Age group'),
+                y=alt.Y('Current_pct:Q',title='% current users',axis=alt.Axis(gridColor='#f0ede6')),
+                color=alt.Color('Drug:N',scale=alt.Scale(scheme='tableau10')),
+                tooltip=['Drug','Age',alt.Tooltip('Current_pct:Q',format='.1f',title='%')]
+            ).properties(height=280)
+            st.altair_chart(c, use_container_width=True)
+
+        with col2:
+            st.markdown('<div class="section-tag">Chart 10 — Heatmap: age × drug (mean score)</div>', unsafe_allow_html=True)
+            hm = alt.Chart(df_age).mark_rect().encode(
+                x=alt.X('Age:O',sort=AGE_ORDER,title='Age group'),
+                y=alt.Y('Drug:N',title=None),
+                color=alt.Color('MeanScore:Q',scale=alt.Scale(scheme='blues'),title='Mean score'),
+                tooltip=['Drug','Age',alt.Tooltip('MeanScore:Q',format='.2f')]
+            ).properties(height=280)
+            txt = hm.mark_text(fontSize=10).encode(
+                text=alt.Text('MeanScore:Q',format='.1f'),
+                color=alt.condition(alt.datum.MeanScore>3,alt.value('white'),alt.value('black')))
+            st.altair_chart(hm+txt, use_container_width=True)
 
         # GENDER
         st.divider()
@@ -423,15 +381,31 @@ elif section == "Demographics":
                 gender_records.append({'Drug':d,'Gender':g,'Current_pct':round(pct,1),'MeanScore':round(mean,2)})
         df_gender = pd.DataFrame(gender_records)
 
-        st.markdown('<div class="section-tag">Chart 11 — % current users by gender</div>', unsafe_allow_html=True)
-        bars = alt.Chart(df_gender).mark_bar(size=12).encode(
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="section-tag">Chart 11 — % current users by gender</div>', unsafe_allow_html=True)
+            bars = alt.Chart(df_gender).mark_bar(size=20).encode(
                 x=alt.X('Current_pct:Q',title='% current users',axis=alt.Axis(gridColor='#f0ede6')),
                 y=alt.Y('Drug:N',sort='-x',title=None),
                 color=alt.Color('Gender:N',scale=alt.Scale(domain=['Female','Male'],range=['#e74c3c','#3498db'])),
                 xOffset='Gender:N',
                 tooltip=['Drug','Gender',alt.Tooltip('Current_pct:Q',format='.1f',title='%')]
-        ).properties(height=max(400, len(selected_drugs_demo)*25))
-        st.altair_chart(bars, use_container_width=True)
+            ).properties(height=max(240,len(selected_drugs_demo)*35))
+            st.altair_chart(bars, use_container_width=True)
+
+        with col2:
+            st.markdown('<div class="section-tag">Chart 12 — Gender gap (Female − Male mean score)</div>', unsafe_allow_html=True)
+            df_pivot = df_gender.pivot(index='Drug',columns='Gender',values='MeanScore').reset_index()
+            if 'Female' in df_pivot.columns and 'Male' in df_pivot.columns:
+                df_pivot['Gap'] = (df_pivot['Female']-df_pivot['Male']).round(2)
+                df_pivot = df_pivot.sort_values('Gap')
+                gap_chart = alt.Chart(df_pivot).mark_bar(cornerRadiusTopLeft=3,cornerRadiusTopRight=3).encode(
+                    x=alt.X('Gap:Q',title='Delta Score (Female - Male)',axis=alt.Axis(gridColor='#f0ede6')),
+                    y=alt.Y('Drug:N',sort=alt.SortField('Gap'),title=None),
+                    color=alt.condition(alt.datum.Gap>0,alt.value('#e74c3c'),alt.value('#3498db')),
+                    tooltip=['Drug',alt.Tooltip('Gap:Q',format='+.2f',title='Gender gap')]
+                ).properties(height=max(240,len(selected_drugs_demo)*35))
+                st.altair_chart(gap_chart, use_container_width=True)
 
         # EDUCATION
         st.divider()
@@ -446,25 +420,97 @@ elif section == "Demographics":
                 edu_records.append({'Drug':d,'Education':edu,'Current_pct':round(pct,1),'MeanScore':round(mean,2),'N':len(sub)})
         df_edu = pd.DataFrame(edu_records)
 
-        st.markdown('<div class="section-tag">Chart 13 — % current users by education level</div>', unsafe_allow_html=True)
-        c = alt.Chart(df_edu).mark_line(point=True,strokeWidth=2).encode(
-            x=alt.X('Education:O',sort=EDU_ORDER,title=None,
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="section-tag">Chart 13 — % current users by education level</div>', unsafe_allow_html=True)
+            c = alt.Chart(df_edu).mark_line(point=True,strokeWidth=2).encode(
+                x=alt.X('Education:O',sort=EDU_ORDER,title=None,
                     axis=alt.Axis(labelAngle=-35,labelLimit=120)),
                 y=alt.Y('Current_pct:Q',title='% current users',axis=alt.Axis(gridColor='#f0ede6')),
-                color=alt.Color('Drug:N',scale=alt.Scale(scheme='tableau20')), # tableau20 pour gérer plus de couleurs
+                color=alt.Color('Drug:N',scale=alt.Scale(scheme='tableau10')),
                 tooltip=['Drug','Education',alt.Tooltip('Current_pct:Q',format='.1f',title='%'),'N']
-        ).properties(height=400)
-        st.altair_chart(c, use_container_width=True)
+            ).properties(height=300)
+            st.altair_chart(c, use_container_width=True)
 
-        st.write("""
-### The Demographic Lens
-Substance use patterns are rarely uniform across a population. By slicing the data by **Age, Gender, and Education**, 
-we can observe societal trends.
-""")
+        with col2:
+            st.markdown('<div class="section-tag">Chart 14 — Education × drug heatmap (mean score)</div>', unsafe_allow_html=True)
+            hm2 = alt.Chart(df_edu).mark_rect().encode(
+                x=alt.X('Education:O',sort=EDU_ORDER,title=None,
+                    axis=alt.Axis(labelAngle=-35,labelLimit=100)),
+                y=alt.Y('Drug:N',title=None),
+                color=alt.Color('MeanScore:Q',scale=alt.Scale(scheme='purples'),title='Mean score'),
+                tooltip=['Drug','Education',alt.Tooltip('MeanScore:Q',format='.2f'),'N']
+            ).properties(height=300)
+            st.altair_chart(hm2, use_container_width=True)
 
 
+# ═══════════════════════════════════════════════════════════════
+# 4 — TRAITS × USAGE
+# ═══════════════════════════════════════════════════════════════
+elif section == "Traits × Usage":
+    st.header("Personality Traits × Drug Usage")
+    focus = [d for d in FOCUS_DRUGS if d in df.columns]
+    selected = st.multiselect("Select drugs:", focus,
+        default=['Cannabis','Ecstasy','LSD','Coke','Alcohol','Nicotine','Heroin','Amphet'])
 
+    @st.cache_data(show_spinner="Computing mean trait scores...")
+    def build_df_mean(drugs_tuple, n):
+        records = []
+        for drug in drugs_tuple:
+            for _, row in df.iterrows():
+                uv = row[drug]
+                for trait in TRAIT_LIST:
+                    records.append({'Drug':drug,'Usage':USAGE_LABELS.get(uv,uv),
+                        'UsageCode':USAGE_NUM.get(uv,-1),'Trait':trait,'Score':row[trait]})
+        dl = pd.DataFrame(records)
+        dm = dl.groupby(['Drug','Usage','UsageCode','Trait'])['Score'].mean().reset_index()
+        dm.columns = ['Drug','Usage','UsageCode','Trait','MeanScore']
+        return dm
+
+    if selected:
+
+        df_mean = build_df_mean(tuple(selected), N)
+        st.markdown('<div class="section-tag">Chart 15 — Mean trait score by usage frequency (click legend to highlight)</div>', unsafe_allow_html=True)
+        sel_param = alt.selection_point(fields=['Drug'],bind='legend')
+        lines = alt.Chart(df_mean).mark_line(point=True,strokeWidth=2).encode(
+            x=alt.X('UsageCode:O',title='Usage frequency',
+                axis=alt.Axis(labelExpr="{'0':'Never','1':'>10yr','2':'Decade','3':'Year','4':'Month','5':'Week','6':'Day'}[datum.value]",
+                    labelAngle=-30)),
+            y=alt.Y('MeanScore:Q',title='Mean z-score',axis=alt.Axis(gridColor='#f0ede6')),
+            color=alt.Color('Drug:N',scale=alt.Scale(scheme='tableau10')),
+            opacity=alt.condition(sel_param,alt.value(1),alt.value(0.08)),
+            facet=alt.Facet('Trait:N',columns=4,
+                header=alt.Header(labelFontSize=11,labelFontWeight='bold')),
+            tooltip=['Drug','Usage','Trait',alt.Tooltip('MeanScore:Q',format='.3f')]
+        ).add_params(sel_param).properties(width=155,height=120).resolve_scale(y='independent')
+        st.altair_chart(lines, use_container_width=True)
+
+        
+        st.divider()
+        st.subheader("Sensation Seeking x Impulsivity deep-dive")
+        col1, col2 = st.columns([3,1])
+        with col2:
+            scatter_drug = st.selectbox("Drug for scatter:", selected, index=0)
+        drug_l = scatter_drug
+        df_sc = df[['Sensation Seeking','Impulsivity',drug_l]].copy()
+        df_sc['Score'] = df_sc[drug_l].map(USAGE_NUM)
+        df_sc['Group'] = df_sc['Score'].apply(lambda c: 'Non/Rare' if c<=1 else ('Past' if c<=3 else 'Current'))
+        df_sc['UsageLabel'] = df_sc[drug_l].map(USAGE_LABELS)
+        scatter = alt.Chart(df_sc.sample(min(800,len(df_sc)),random_state=42)).mark_circle(size=55,opacity=0.6).encode(
+            x=alt.X('Sensation Seeking:Q'),
+            y=alt.Y('Impulsivity:Q'),
+            color=alt.Color('Group:N',title=f'{scatter_drug} use',
+                scale=alt.Scale(domain=['Non/Rare','Past','Current'],range=['#2ecc71','#f39c12','#e74c3c'])),
+            tooltip=['Sensation Seeking','Impulsivity','UsageLabel']
+        ).properties(height=340)
+        reg = scatter.transform_regression('Sensation Seeking','Impulsivity',groupby=['Group']).mark_line(size=2)
+        with col1:
+            st.altair_chart((scatter+reg).resolve_scale(color='shared'), use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════
 # 5 — DRUG CO-USE
+# ═══════════════════════════════════════════════════════════════
 elif section == "Drug Co-use":
     st.header("Drug Co-use Patterns")
     st.markdown("Which drugs tend to be used together?")
@@ -534,10 +580,23 @@ elif section == "Drug Co-use":
         ).properties(height=280)
         st.altair_chart(jt_chart, use_container_width=True)
 
+    st.divider()
+    st.markdown('<div class="section-tag">Chart 20 — Co-use scatter: usage scores of two drugs</div>', unsafe_allow_html=True)
+    sc2 = alt.Chart(df[[f'{drug_a}_score',f'{drug_b}_score']].rename(
+        columns={f'{drug_a}_score':drug_a,f'{drug_b}_score':drug_b})
+    ).mark_circle(size=40,opacity=0.35,color='#1a1a1a').encode(
+        x=alt.X(f'{drug_a}:Q',title=f'{drug_a} usage score (0=Never, 6=Daily)'),
+        y=alt.Y(f'{drug_b}:Q',title=f'{drug_b} usage score'),
+        tooltip=[drug_a,drug_b]
+    ).properties(height=320)
+    reg2 = sc2.transform_regression(drug_a,drug_b).mark_line(color='#c0392b',size=2)
+    st.altair_chart(sc2+reg2, use_container_width=True)
 
+
+# ═══════════════════════════════════════════════════════════════
 # 6 — POLY-DRUG PROFILES
+# ═══════════════════════════════════════════════════════════════
 elif section == "Poly-drug Profiles":
-
     st.header("Poly-drug Use Profiles")
     st.markdown("Who uses multiple substances simultaneously? How do personality traits scale with poly-drug intensity?")
 
@@ -567,6 +626,37 @@ elif section == "Poly-drug Profiles":
     st.altair_chart(poly_lines, use_container_width=True)
 
     st.divider()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown('<div class="section-tag">Chart 23 — Age × poly-drug use (%)</div>', unsafe_allow_html=True)
+        ap = df.groupby('Age_Label')['n_illicit_current'].value_counts(normalize=True)\
+               .mul(100).round(1).reset_index()
+        ap.columns = ['Age','n_drugs','Pct']
+        age_poly = alt.Chart(ap).mark_rect().encode(
+            x=alt.X('n_drugs:O',title='N current drugs'),
+            y=alt.Y('Age:O',sort=AGE_ORDER,title=None),
+            color=alt.Color('Pct:Q',scale=alt.Scale(scheme='oranges'),title='% of age group'),
+            tooltip=['Age','n_drugs',alt.Tooltip('Pct:Q',format='.1f',title='%')]
+        ).properties(height=240)
+        txt_ap = age_poly.mark_text(fontSize=9).encode(
+            text=alt.Text('Pct:Q',format='.0f'),
+            color=alt.condition(alt.datum.Pct>15,alt.value('white'),alt.value('black')))
+        st.altair_chart(age_poly+txt_ap, use_container_width=True)
+
+    with col2:
+        st.markdown('<div class="section-tag">Chart 24 — Education × mean poly-drug use</div>', unsafe_allow_html=True)
+        ep = df.groupby('Education_Label')['n_illicit_current'].mean().reset_index()
+        ep.columns = ['Education','Mean_n_drugs']
+        ep = ep.sort_values('Mean_n_drugs',ascending=False)
+        edu_poly = alt.Chart(ep).mark_bar(cornerRadiusTopLeft=3,cornerRadiusTopRight=3).encode(
+            x=alt.X('Mean_n_drugs:Q',title='Mean number of current illicit drugs',axis=alt.Axis(gridColor='#f0ede6')),
+            y=alt.Y('Education:N',sort='-x',title=None),
+            color=alt.Color('Mean_n_drugs:Q',scale=alt.Scale(scheme='purples'),legend=None),
+            tooltip=['Education',alt.Tooltip('Mean_n_drugs:Q',format='.2f')]
+        ).properties(height=240)
+        st.altair_chart(edu_poly, use_container_width=True)
+
+    st.divider()
     st.markdown('<div class="section-tag">Chart 25 — Which drugs are used by heavy poly-users?</div>', unsafe_allow_html=True)
     poly_drug_records = []
     for n in range(0,7):
@@ -586,17 +676,99 @@ elif section == "Poly-drug Profiles":
         text=alt.Text('Pct:Q',format='.0f'),
         color=alt.condition(alt.datum.Pct>50,alt.value('white'),alt.value('black')))
     st.altair_chart(pd_hm+pd_txt, use_container_width=True)
-    st.write("""
-### The Complexity of Poly-drug Use
-Poly-drug use is not just about the quantity of substances; it is a behavioral marker. 
-As shown in the **Trait Intensity** chart, there is a positive correlation between the 
-number of products used and scores in **Impulsivity** and **Sensation Seeking**. 
-This suggests that for heavy poly-users, the psychological drive for novel experiences 
-outweighs the perceived risks associated with mixing substances.
-""")
 
 
+# ═══════════════════════════════════════════════════════════════
+# 7 — PREDICTION
+# ═══════════════════════════════════════════════════════════════
+elif section == "Prediction":
+    st.header("Predictive Modeling")
+    st.markdown("Logistic regression: which traits & demographics predict current drug use?")
+
+    focus = [d for d in FOCUS_DRUGS if d in df.columns]
+    model_drugs = st.multiselect("Drugs to model:", focus,
+        default=['Cannabis','Ecstasy','LSD','Coke','Nicotine','Heroin','Amphet','Benzos'])
+
+    col1, col2 = st.columns(2)
+    with col1:
+        C_val = st.slider("Regularization C:", 0.01, 5.0, 1.0, 0.1)
+    with col2:
+        cv_k = st.slider("CV folds:", 3, 10, 5)
+
+    features = st.multiselect("Features:", TRAIT_LIST+['Age_Label','Education_Label','Gender_Label'], default=TRAIT_LIST)
+
+    @st.cache_data(show_spinner="Fitting models...")
+    def fit_models(drugs_t, C, cv, feats_t, n):
+        feat_cols = [f for f in feats_t if f in TRAIT_LIST+['Age_Label','Education_Label','Gender_Label']]
+        X_all = df[feat_cols].dropna()
+        records = []
+        for drug in drugs_t:
+            tmp = df.loc[X_all.index,drug]
+            y_bin = tmp.map(lambda x: 1 if x in ['CL4','CL5','CL6'] else 0)
+            valid = ~y_bin.isna()
+            Xf,yf = X_all[valid],y_bin[valid]
+            if yf.sum()<10: continue
+            lr = LogisticRegression(max_iter=1000,C=C)
+            lr.fit(Xf,yf)
+            auc = cross_val_score(lr,Xf,yf,cv=cv,scoring='roc_auc').mean()
+            for feat,coef in zip(feat_cols,lr.coef_[0]):
+                records.append({'Drug':drug,'Feature':feat,'Coefficient':round(coef,3),
+                    'AUC':round(auc,3),'Prevalence':f"{yf.mean()*100:.0f}%"})
+        return pd.DataFrame(records)
+
+    if model_drugs and features:
+        df_coef = fit_models(tuple(model_drugs),C_val,cv_k,tuple(features),N)
+        if not df_coef.empty:
+            auc_df = df_coef.groupby('Drug')['AUC'].first().reset_index().sort_values('AUC',ascending=False)
+
+            st.markdown('<div class="section-tag">Chart 26 — Model AUC per drug (higher = better prediction)</div>', unsafe_allow_html=True)
+            auc_bar = alt.Chart(auc_df).mark_bar(cornerRadiusTopLeft=3,cornerRadiusTopRight=3).encode(
+                x=alt.X('Drug:N',sort='-y',title=None,axis=alt.Axis(labelAngle=-25)),
+                y=alt.Y('AUC:Q',scale=alt.Scale(domain=[0.5,1.0]),title='CV AUC',axis=alt.Axis(gridColor='#f0ede6')),
+                color=alt.Color('AUC:Q',scale=alt.Scale(scheme='blues',domain=[0.5,0.9]),legend=None),
+                tooltip=['Drug',alt.Tooltip('AUC:Q',format='.3f')]
+            ).properties(height=220)
+            rule = alt.Chart(pd.DataFrame({'y':[0.5]})).mark_rule(color='red',strokeDash=[4,3]).encode(y='y:Q')
+            st.altair_chart(auc_bar+rule, use_container_width=True)
+
+            st.divider()
+            st.markdown('<div class="section-tag">Chart 27 — Coefficient heatmap (log-odds)</div>', unsafe_allow_html=True)
+            coef_hm = alt.Chart(df_coef).mark_rect().encode(
+                x=alt.X('Drug:N',title=None,axis=alt.Axis(labelAngle=-30)),
+                y=alt.Y('Feature:N',title=None),
+                color=alt.Color('Coefficient:Q',scale=alt.Scale(scheme='redblue',domain=[-1.5,1.5],reverse=True),title='Log-odds'),
+                tooltip=['Drug','Feature',alt.Tooltip('Coefficient:Q',format='.3f'),
+                    alt.Tooltip('AUC:Q',title='CV AUC'),'Prevalence']
+            ).properties(height=max(200,len(features)*40))
+            coef_txt = coef_hm.mark_text(fontSize=10).encode(
+                text=alt.Text('Coefficient:Q',format='.2f'),
+                color=alt.condition(alt.datum.Coefficient>0.4,alt.value('white'),alt.value('black')))
+            st.altair_chart(coef_hm+coef_txt, use_container_width=True)
+
+            st.divider()
+            st.markdown('<div class="section-tag">Chart 28 — Top predictors per drug (lollipop)</div>', unsafe_allow_html=True)
+            drug_pred = st.selectbox("Select drug:", model_drugs, key='lollipop')
+            sub_coef  = df_coef[df_coef['Drug']==drug_pred].sort_values('Coefficient')
+            lollipop = alt.layer(
+                alt.Chart(sub_coef).mark_rule(color='#ccc').encode(
+                    y=alt.Y('Feature:N',sort=alt.SortField('Coefficient'),title=None),
+                    x=alt.X('Coefficient:Q',title='Log-odds coefficient',axis=alt.Axis(gridColor='#f0ede6')),
+                    x2=alt.X2(value=0)),
+                alt.Chart(sub_coef).mark_point(size=120,filled=True).encode(
+                    y=alt.Y('Feature:N',sort=alt.SortField('Coefficient')),
+                    x=alt.X('Coefficient:Q'),
+                    color=alt.condition(alt.datum.Coefficient>0,alt.value('#e74c3c'),alt.value('#3498db')),
+                    tooltip=['Feature',alt.Tooltip('Coefficient:Q',format='.3f')])
+            ).properties(height=280)
+            st.altair_chart(lollipop, use_container_width=True)
+            auc_val = auc_df[auc_df['Drug']==drug_pred]['AUC'].values
+            if len(auc_val):
+                st.caption(f"Model AUC for {drug_pred}: **{auc_val[0]:.3f}** (random baseline = 0.5)")
+
+
+# ═══════════════════════════════════════════════════════════════
 # 8 — RADAR
+# ═══════════════════════════════════════════════════════════════
 elif section == "Radar":
     st.header("Psychological Profile Radar")
     st.markdown("Compare personality fingerprints across drugs and usage levels.")
