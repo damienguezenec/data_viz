@@ -54,7 +54,8 @@ TRAIT_LIST = list(TRAIT_MAP.values())
 AGE_MAP    = {-0.95197:'18-24',-0.07854:'25-34',0.49788:'35-44',
                1.09449:'45-54',1.82213:'55-64',2.59171:'65+'}
 AGE_ORDER  = ['18-24','25-34','35-44','45-54','55-64','65+']
-GENDER_MAP = {-0.48246:'Female',0.48246:'Male'}
+GENDER_MAP = {0.48246: 'Female', -0.48246: 'Male'}
+
 EDU_MAP    = {-2.43591:'Left school <16',-1.73790:'Left school @16',-1.43719:'Left school @17',
               -1.22751:'Left school @18',-0.61113:'Some college',-0.05921:'Professional cert.',
                0.45468:'University degree',1.16365:'Masters degree',1.98437:'Doctorate'}
