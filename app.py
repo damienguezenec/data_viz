@@ -22,7 +22,7 @@ st.markdown("""
 <style>
 
     div[data-testid="stSidebarContent"] {
-        background-color: var(--background-color); /* S'adapte au thème */
+        background-color: var(--background-color);
         border-right: 1px solid rgba(151, 151, 151, 0.1);
     }
     
@@ -30,7 +30,7 @@ st.markdown("""
         background: #faf9f6;
     }
     [data-theme="dark"] div[data-testid="stSidebarContent"] {
-        background: #1a1c24; /* Un bleu-gris foncé professionnel */
+        background: #1a1c24;
     }
     div[data-testid="stSidebarContent"] .stText, 
     div[data-testid="stSidebarContent"] label {
@@ -164,7 +164,8 @@ N = len(df)
 
 # HEADER
 st.markdown('<div class="kicker">Data Analysis · Psychology · Substance Use</div>', unsafe_allow_html=True)
-st.title("Mind & Substance")
+st.title("Mind & Substance - a link between drug use and personality")
+st.subheader("Trying to find relevant correlations between behaviour and drug use, amongst different populations")
 st.markdown(f" Please run the app in light mode, as the graph were built for a light mode setting.")
 # PROJECT DESCRIPTION / ACCOMPANYING TEXT
 st.markdown("""
